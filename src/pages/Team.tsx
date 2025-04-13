@@ -6,18 +6,18 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import { Copy, Users } from 'lucide-react';
 
 interface TeamMember {
   id: string;
   email: string;
-  mobile: string;
+  phone: string;
   created_at: string;
 }
 
 const Team = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const [referralCode, setReferralCode] = useState('');
   const [referralLink, setReferralLink] = useState('');
@@ -29,24 +29,15 @@ const Team = () => {
       if (!user) return;
       
       try {
-        // Fetch user's referral code
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('invitation_code')
-          .eq('id', user.id)
-          .single();
-          
-        if (userError) throw userError;
-        
-        if (userData?.invitation_code) {
-          setReferralCode(userData.invitation_code);
-          setReferralLink(`${window.location.origin}/register?ref=${userData.invitation_code}`);
+        if (profile?.referral_code) {
+          setReferralCode(profile.referral_code);
+          setReferralLink(`${window.location.origin}/register?ref=${profile.referral_code}`);
         }
         
         // Fetch team members (users referred by this user)
         const { data: teamData, error: teamError } = await supabase
-          .from('users')
-          .select('id, email, mobile, created_at')
+          .from('profiles')
+          .select('id, email, phone, created_at')
           .eq('referred_by', user.id);
           
         if (teamError) throw teamError;
@@ -65,7 +56,7 @@ const Team = () => {
     };
     
     fetchTeamData();
-  }, [user]);
+  }, [user, profile]);
 
   const copyToClipboard = (text: string, type: 'code' | 'link') => {
     navigator.clipboard.writeText(text).then(
@@ -186,7 +177,7 @@ const Team = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">{member.email}</p>
-                        <p className="text-gray-500 text-sm">{member.mobile}</p>
+                        <p className="text-gray-500 text-sm">{member.phone}</p>
                       </div>
                       <div className="text-xs text-gray-500">
                         Joined {new Date(member.created_at).toLocaleDateString()}

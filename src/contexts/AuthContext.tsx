@@ -34,20 +34,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       setProfile(data);
       
-      // Check if user is admin
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('is_admin')
-        .eq('id', userId)
-        .single();
+      // Check if user is admin directly from the profiles table
+      // The is_admin column is now part of the profiles table
+      setIsAdmin(data?.is_admin || false);
       
-      if (userError) {
-        // Silently handle this error as the users table might not exist
-        console.log('Note: Could not check admin status');
-        setIsAdmin(false);
-      } else {
-        setIsAdmin(userData?.is_admin || false);
-      }
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast({

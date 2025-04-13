@@ -55,7 +55,7 @@ export const signUp = async (data: SignupData) => {
       return null;
     }
     
-    // Generate a unique referral code
+    // Generate a unique 6-digit referral code
     const uniqueReferralCode = await generateReferralCode();
     
     // Create the user
@@ -84,7 +84,7 @@ export const signUp = async (data: SignupData) => {
           withdrawal_balance: 0,
           total_withdrawn: 0,
           referral_code: uniqueReferralCode,
-          referred_by: authData.user.user_metadata.referred_by,
+          referred_by: inviterData.id,
           phone: mobile
         });
         
