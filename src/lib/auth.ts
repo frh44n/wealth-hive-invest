@@ -1,5 +1,5 @@
 
-import { supabase } from '@/integrations/supabase/client'; // Use the main client
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 export interface SignupData {
@@ -13,6 +13,26 @@ export interface LoginData {
   email: string;
   password: string;
 }
+
+// Generate a unique 6-digit referral code
+const generateReferralCode = async (): Promise<string> => {
+  while (true) {
+    // Generate a 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Check if this code already exists
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('referral_code')
+      .eq('referral_code', code)
+      .single();
+    
+    // If no existing code is found, return this code
+    if (error || !data) {
+      return code;
+    }
+  }
+};
 
 // Sign up a new user
 export const signUp = async (data: SignupData) => {
@@ -35,6 +55,9 @@ export const signUp = async (data: SignupData) => {
       return null;
     }
     
+    // Generate a unique referral code
+    const uniqueReferralCode = await generateReferralCode();
+    
     // Create the user
     const { data: authData, error } = await supabase.auth.signUp({
       email,
@@ -42,7 +65,7 @@ export const signUp = async (data: SignupData) => {
       options: {
         data: {
           mobile,
-          referral_code: Math.random().toString(36).substring(2, 10).toUpperCase(),
+          referral_code: uniqueReferralCode,
           referred_by: inviterData.id
         }
       }
@@ -60,14 +83,13 @@ export const signUp = async (data: SignupData) => {
           deposit_balance: 0,
           withdrawal_balance: 0,
           total_withdrawn: 0,
-          referral_code: authData.user.user_metadata.referral_code,
+          referral_code: uniqueReferralCode,
           referred_by: authData.user.user_metadata.referred_by,
           phone: mobile
         });
         
       if (profileError) {
         console.error('Error creating profile:', profileError);
-        // Continue despite profile error as auth was successful
       }
     }
     

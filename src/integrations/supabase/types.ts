@@ -84,6 +84,7 @@ export type Database = {
           deposit_balance: number
           email: string
           id: string
+          is_admin: boolean | null
           name: string | null
           phone: string | null
           referral_code: string
@@ -96,6 +97,7 @@ export type Database = {
           deposit_balance?: number
           email: string
           id: string
+          is_admin?: boolean | null
           name?: string | null
           phone?: string | null
           referral_code: string
@@ -108,6 +110,7 @@ export type Database = {
           deposit_balance?: number
           email?: string
           id?: string
+          is_admin?: boolean | null
           name?: string | null
           phone?: string | null
           referral_code?: string
