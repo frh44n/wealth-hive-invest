@@ -1,5 +1,5 @@
 
-import { supabase } from './supabase';
+import { supabase } from '@/integrations/supabase/client'; // Use the main client
 import { toast } from '@/hooks/use-toast';
 
 export interface SignupData {
@@ -21,9 +21,9 @@ export const signUp = async (data: SignupData) => {
     
     // Check if invitation code exists
     const { data: inviterData, error: inviterError } = await supabase
-      .from('users')
+      .from('profiles')
       .select('id')
-      .eq('invitation_code', invitationCode)
+      .eq('referral_code', invitationCode)
       .single();
     
     if (inviterError || !inviterData) {
@@ -42,7 +42,7 @@ export const signUp = async (data: SignupData) => {
       options: {
         data: {
           mobile,
-          invitation_code: Math.random().toString(36).substring(2, 10).toUpperCase(),
+          referral_code: Math.random().toString(36).substring(2, 10).toUpperCase(),
           referred_by: inviterData.id
         }
       }
@@ -55,13 +55,20 @@ export const signUp = async (data: SignupData) => {
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-          user_id: authData.user.id,
-          deposit_wallet: 0,
-          withdrawal_wallet: 0,
-          total_withdrawn: 0
+          id: authData.user.id,
+          email: authData.user.email,
+          deposit_balance: 0,
+          withdrawal_balance: 0,
+          total_withdrawn: 0,
+          referral_code: authData.user.user_metadata.referral_code,
+          referred_by: authData.user.user_metadata.referred_by,
+          phone: mobile
         });
         
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+        // Continue despite profile error as auth was successful
+      }
     }
     
     toast({

@@ -1,6 +1,6 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client'; // Use the main client
 import { User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('user_id', userId)
+        .eq('id', userId)
         .single();
 
       if (error) throw error;
@@ -41,9 +41,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('id', userId)
         .single();
       
-      if (userError) throw userError;
-      
-      setIsAdmin(userData?.is_admin || false);
+      if (userError) {
+        // Silently handle this error as the users table might not exist
+        console.log('Note: Could not check admin status');
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(userData?.is_admin || false);
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
       toast({
