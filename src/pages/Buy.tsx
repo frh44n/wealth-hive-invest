@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
+import { Info, X } from 'lucide-react';
 
 const Buy = () => {
   const { user, profile, refreshProfile } = useAuth();
@@ -17,13 +18,14 @@ const Buy = () => {
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [showPlanDetails, setShowPlanDetails] = useState(false);
 
   // Fetch investment plans
   useEffect(() => {
     const fetchPlans = async () => {
       try {
         const { data, error } = await supabase
-          .from('plans')
+          .from('investment_plans')
           .select('*')
           .order('price', { ascending: true });
           
@@ -46,12 +48,14 @@ const Buy = () => {
   }, []);
 
   // Handle buy button click
-  const handleBuyClick = (id: string) => {
-    const plan = plans.find(p => p.id === id);
-    if (plan) {
-      setSelectedPlan(plan);
-      setIsDialogOpen(true);
-    }
+  const handleBuyClick = (plan: any) => {
+    setSelectedPlan(plan);
+    setIsDialogOpen(true);
+  };
+
+  // Handle plan details toggle
+  const togglePlanDetails = () => {
+    setShowPlanDetails(!showPlanDetails);
   };
 
   // Handle plan purchase
@@ -59,7 +63,7 @@ const Buy = () => {
     if (!user || !profile || !selectedPlan) return;
     
     // Check if user has enough balance
-    if ((profile.deposit_wallet || 0) < selectedPlan.price) {
+    if ((profile.deposit_balance || 0) < selectedPlan.price) {
       toast({
         title: "Insufficient balance",
         description: "Please add funds to your deposit wallet",
@@ -75,31 +79,29 @@ const Buy = () => {
       // Calculate expiry date
       const purchaseDate = new Date();
       const expiryDate = new Date(purchaseDate);
-      expiryDate.setDate(expiryDate.getDate() + selectedPlan.validity);
+      expiryDate.setDate(expiryDate.getDate() + selectedPlan.validity_days);
       
       // Add plan to user's purchased plans
       const { error: planError } = await supabase
-        .from('user_plans')
+        .from('purchased_plans')
         .insert({
           user_id: user.id,
           plan_id: selectedPlan.id,
           purchase_date: purchaseDate.toISOString(),
-          expiry_date: expiryDate.toISOString(),
-          total_claimed: 0,
-          active: true
+          expiry_date: expiryDate.toISOString()
         });
         
       if (planError) throw planError;
       
-      // Deduct amount from deposit wallet
-      const { error: walletError } = await supabase
+      // Deduct amount from deposit balance
+      const { error: balanceError } = await supabase
         .from('profiles')
         .update({
-          deposit_wallet: profile.deposit_wallet - selectedPlan.price
+          deposit_balance: profile.deposit_balance - selectedPlan.price
         })
-        .eq('user_id', user.id);
+        .eq('id', user.id);
         
-      if (walletError) throw walletError;
+      if (balanceError) throw balanceError;
       
       // Add transaction record
       const { error: txnError } = await supabase
@@ -109,12 +111,12 @@ const Buy = () => {
           type: 'plan_purchase',
           amount: selectedPlan.price,
           status: 'completed',
-          details: {
+          details: JSON.stringify({
             plan_id: selectedPlan.id,
             plan_name: selectedPlan.name,
-            validity: selectedPlan.validity,
+            validity_days: selectedPlan.validity_days,
             daily_earning: selectedPlan.daily_earning
-          }
+          })
         });
         
       if (txnError) throw txnError;
@@ -162,11 +164,11 @@ const Buy = () => {
                 id={plan.id}
                 name={plan.name}
                 price={plan.price}
-                validity={plan.validity}
+                validity={plan.validity_days}
                 dailyEarning={plan.daily_earning}
                 image={plan.image_url}
                 description={plan.description}
-                onBuy={handleBuyClick}
+                onBuy={() => handleBuyClick(plan)}
               />
             ))}
           </div>
@@ -177,11 +179,27 @@ const Buy = () => {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Purchase</DialogTitle>
+            <DialogTitle className="flex items-center justify-between">
+              Confirm Purchase
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={togglePlanDetails}
+                className="hover:bg-accent"
+              >
+                {showPlanDetails ? <X className="h-5 w-5" /> : <Info className="h-5 w-5" />}
+              </Button>
+            </DialogTitle>
           </DialogHeader>
           
           {selectedPlan && (
             <div className="py-4">
+              {showPlanDetails && (
+                <div className="bg-gray-50 p-4 rounded-md mb-4 text-sm">
+                  <p>{selectedPlan.description}</p>
+                </div>
+              )}
+              
               <div className="flex justify-between items-center mb-4">
                 <span className="text-lg font-medium">{selectedPlan.name}</span>
                 <span className="text-xl font-bold">₹{selectedPlan.price}</span>
@@ -191,7 +209,7 @@ const Buy = () => {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-gray-500">Validity:</span>
-                    <p>{selectedPlan.validity} days</p>
+                    <p>{selectedPlan.validity_days} days</p>
                   </div>
                   <div>
                     <span className="text-gray-500">Daily Earning:</span>
@@ -199,18 +217,18 @@ const Buy = () => {
                   </div>
                   <div>
                     <span className="text-gray-500">Total Earning:</span>
-                    <p>₹{selectedPlan.daily_earning * selectedPlan.validity}</p>
+                    <p>₹{selectedPlan.daily_earning * selectedPlan.validity_days}</p>
                   </div>
                   <div>
                     <span className="text-gray-500">ROI:</span>
-                    <p>{(((selectedPlan.daily_earning * selectedPlan.validity) - selectedPlan.price) / selectedPlan.price * 100).toFixed(2)}%</p>
+                    <p>{(((selectedPlan.daily_earning * selectedPlan.validity_days) - selectedPlan.price) / selectedPlan.price * 100).toFixed(2)}%</p>
                   </div>
                 </div>
               </div>
               
               <div className="bg-amber-50 p-3 rounded-md text-amber-800 text-sm mb-4">
-                <p>Amount will be deducted from your deposit wallet.</p>
-                <p className="font-medium mt-1">Available balance: ₹{profile?.deposit_wallet || 0}</p>
+                <p>Amount will be deducted from your deposit balance.</p>
+                <p className="font-medium mt-1">Available balance: ₹{profile?.deposit_balance || 0}</p>
               </div>
             </div>
           )}
@@ -225,7 +243,7 @@ const Buy = () => {
             </Button>
             <Button
               onClick={handlePurchase}
-              disabled={isPurchasing || (profile?.deposit_wallet || 0) < (selectedPlan?.price || 0)}
+              disabled={isPurchasing || (profile?.deposit_balance || 0) < (selectedPlan?.price || 0)}
               className="bg-primary hover:bg-primary-dark"
             >
               {isPurchasing ? 'Processing...' : 'Confirm Purchase'}
